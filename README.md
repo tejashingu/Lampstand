@@ -23,7 +23,19 @@ third-party PPAs.
 **Dashboard**, once set up:
 - **Virtual Hosts** — pick a project folder, give it a local domain, and it creates the Apache
   vhost config, adds the `/etc/hosts` entry, and reloads Apache. Enable/disable or delete from
-  the same screen.
+  the same screen — deleting can optionally remove the project files and database as well.
+  - **Framework installs** — optionally install a fresh project into an empty folder: WordPress
+    (with its MySQL database, user and `wp-config.php` created for you), Laravel, Laravel +
+    Inertia (React or Vue) and Laravel + Livewire starter kits (assets built with npm), Symfony,
+    Drupal, CodeIgniter 4, CakePHP, Yii 2 or Slim. Composer/npm run as the folder's owner, not
+    root, and Composer is installed from apt if it's missing.
+  - **Existing-folder scan** — point it at a folder that already has a project and it detects
+    WordPress (incl. Bedrock), Laravel (and which Inertia/Livewire stack), Drupal, Symfony,
+    CodeIgniter, CakePHP, Yii, Craft CMS, Slim or Joomla, sets the right document root
+    (`public/`, `web/`, `webroot/`, ...), and can give Apache write access to the cache/upload
+    folders. You can override the detected framework if the scan gets it wrong.
+  - `mod_rewrite` is enabled automatically, and you're warned if Apache can't reach the folder
+    (e.g. a private home directory).
 - **Users & Groups** — toggle any system user's membership in `www-data` (so they can write to
   the web root) and the shared `nvm` group, or create a brand-new user.
 - **Permissions** — scans `/var/www/html` for anything that isn't `www-data:www-data`,
@@ -62,9 +74,9 @@ npm run dist
 
 `electron-builder` (already configured in `package.json`) produces two artifacts in `dist/`:
 
-- **`Lampstand-1.0.0.AppImage`** — a single portable executable, no installation needed.
+- **`Lampstand-1.2.0.AppImage`** — a single portable executable, no installation needed.
   `chmod +x` it and double-click, or run it from a terminal.
-- **`lampstand_1.0.0_amd64.deb`** — a normal Debian package for `sudo apt install ./lampstand_*.deb`
+- **`lampstand_1.2.0_amd64.deb`** — a normal Debian package for `sudo apt install ./lampstand_*.deb`
   or `sudo dpkg -i` (installs to `/opt/Lampstand`).
 
 The app menu icon these create launches Lampstand **unprivileged** — you get the dashboard
@@ -92,8 +104,8 @@ The simplest path for getting this to other people/machines:
    end.
 4. Optionally add a one-line install script to your release notes, e.g.:
    ```bash
-   wget https://github.com/<you>/lampstand/releases/latest/download/lampstand_1.0.0_amd64.deb
-   sudo apt install ./lampstand_1.0.0_amd64.deb
+   wget https://github.com/<you>/lampstand/releases/latest/download/lampstand_1.2.0_amd64.deb
+   sudo apt install ./lampstand_1.2.0_amd64.deb
    ```
 
 ### 3. Further options (not set up yet, worth knowing about)
@@ -115,8 +127,13 @@ hosting, and versioned downloads users can trust.
 - On first launch you'll be asked to accept a short terms notice: this software modifies system
   packages and files, is provided with no warranty, and is released under the MIT license (see
   [LICENSE](LICENSE)).
-- Deleting a virtual host removes its Apache config and `/etc/hosts` entry only — your project
-  files are never touched.
+- Deleting a virtual host opens a dialog showing the site's framework, project folder and
+  database (read from `wp-config.php`, `.env`, Drupal's `settings.php`, ...). By default only the
+  Apache config and `/etc/hosts` entry are removed. You can also tick **Delete all project
+  files** and/or **Drop the MySQL database** (its MySQL user is dropped too, unless it has
+  access to other databases); either one requires typing the domain to confirm. Lampstand
+  refuses to delete system folders, home folders, `/var/www/html`, or any folder another site
+  still uses, and won't drop system or remote databases.
 - The Permissions tool only ever targets the directory you point it at (default
   `/var/www/html`); it validates the path before running `chown`/`chmod`.
 

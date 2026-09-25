@@ -90,56 +90,32 @@ const Dashboard = (() => {
   }
 
   // ---------------- Virtual Hosts ----------------
+  let vhostListCard = null;
+
   async function renderVhosts(content) {
-    const vhosts = await window.api.vhost.list();
+    const form = await vhostForm();
     content.innerHTML = '';
     content.appendChild(el('h1', { class: 'page-title', text: 'Virtual Hosts' }));
-    content.appendChild(el('p', { class: 'page-sub', text: 'Map a project folder to a local domain. This creates an Apache vhost, an /etc/hosts entry, and reloads Apache.' }));
+    content.appendChild(el('p', { class: 'page-sub', text: 'Map a project folder to a local domain — optionally installing WordPress, Laravel or another framework into it. Lampstand scans existing folders to pick the right document root, then creates the Apache vhost and /etc/hosts entry.' }));
 
-    const formCard = el('div', { class: 'card' });
-    formCard.appendChild(el('h2', { text: 'Add a virtual host' }));
-    const domainInput = el('input', { type: 'text', placeholder: 'myproject.test' });
-    const pathInput = el('input', { type: 'text', placeholder: '/home/you/projects/myproject', readonly: 'readonly' });
-    const browseBtn = el('button', { text: 'Browse…' });
-    browseBtn.addEventListener('click', async () => {
-      const dir = await window.api.chooseFolder();
-      if (dir) pathInput.value = dir;
-    });
+    content.appendChild(form);
+    vhostListCard = el('div', { class: 'card' });
+    content.appendChild(vhostListCard);
+    await refreshVhostList();
+  }
 
-    formCard.appendChild(el('label', { class: 'field' }, [el('span', { text: 'Domain' }), domainInput]));
-    formCard.appendChild(el('label', { class: 'field' }, [
-      el('span', { text: 'Project folder' }),
-      el('div', { class: 'row' }, [pathInput, browseBtn]),
-    ]));
-    const createBtn = el('button', { class: 'primary', text: 'Create Virtual Host' });
-    formCard.appendChild(createBtn);
-    createBtn.addEventListener('click', async () => {
-      if (!domainInput.value || !pathInput.value) return toast('Enter a domain and folder', 'err');
-      createBtn.disabled = true;
-      try {
-        const res = await window.api.vhost.create(domainInput.value.trim(), pathInput.value.trim());
-        if (res.ok) {
-          toast(`Virtual host ${domainInput.value} created`, 'ok');
-          domainInput.value = '';
-          pathInput.value = '';
-          render();
-        } else {
-          toast(res.error || 'Failed to create virtual host', 'err');
-        }
-      } finally {
-        createBtn.disabled = false;
-      }
-    });
-    content.appendChild(formCard);
-
-    const listCard = el('div', { class: 'card' });
+  // Redraws only the list, so the create form's log stays visible.
+  async function refreshVhostList() {
+    const vhosts = await window.api.vhost.list();
+    const listCard = vhostListCard;
+    listCard.innerHTML = '';
     listCard.appendChild(el('h2', { text: `Existing virtual hosts (${vhosts.length})` }));
     if (!vhosts.length) {
       listCard.appendChild(el('div', { class: 'empty', text: 'No virtual hosts yet — create one above.' }));
     } else {
       const table = el('table');
       table.appendChild(el('tr', {}, [
-        el('th', { text: 'Domain' }), el('th', { text: 'Document Root' }), el('th', { text: 'Enabled' }), el('th', { text: '' }),
+        el('th', { text: 'Domain' }), el('th', { text: 'Framework' }), el('th', { text: 'Document Root' }), el('th', { text: 'Enabled' }), el('th', { text: '' }),
       ]));
       vhosts.forEach((v) => {
         const toggle = el('label', { class: 'switch' }, [
@@ -152,13 +128,10 @@ const Dashboard = (() => {
           else toast(`${v.domain} ${e.target.checked ? 'enabled' : 'disabled'}`, 'ok');
         });
         const delBtn = el('button', { class: 'danger small', text: 'Delete' });
-        delBtn.addEventListener('click', async () => {
-          if (!confirm(`Delete virtual host ${v.domain}? This removes the Apache config and /etc/hosts entry (project files are kept).`)) return;
-          const res = await window.api.vhost.delete(v.domain);
-          if (res.ok) { toast('Deleted', 'ok'); render(); } else toast(res.error || 'Failed', 'err');
-        });
+        delBtn.addEventListener('click', () => openDeleteDialog(v.domain));
         table.appendChild(el('tr', {}, [
           el('td', {}, [el('strong', { text: v.domain })]),
+          el('td', { class: v.framework ? '' : 'faint', text: v.framework || '—' }),
           el('td', { class: 'mono', text: v.docRoot }),
           el('td', {}, [toggle]),
           el('td', {}, [delBtn]),
@@ -166,7 +139,322 @@ const Dashboard = (() => {
       });
       listCard.appendChild(table);
     }
-    content.appendChild(listCard);
+  }
+
+  // Single site:log listener, dispatched to whichever form is mounted.
+  let activeSiteLog = null;
+  let frameworkList = null;
+
+  async function vhostForm() {
+    if (!frameworkList) frameworkList = await window.api.site.frameworks();
+    const byKey = Object.fromEntries(frameworkList.map((f) => [f.key, f]));
+
+    const card = el('div', { class: 'card' });
+    card.appendChild(el('h2', { text: 'Add a virtual host' }));
+
+    const domainInput = el('input', { type: 'text', placeholder: 'myproject.test' });
+    const pathInput = el('input', { type: 'text', placeholder: '/home/you/projects/myproject' });
+    const browseBtn = el('button', { text: 'Browse…' });
+    card.appendChild(el('label', { class: 'field' }, [el('span', { text: 'Domain' }), domainInput]));
+    card.appendChild(el('label', { class: 'field' }, [
+      el('span', { text: 'Project folder' }),
+      el('div', { class: 'row' }, [pathInput, el('div', { style: 'flex:0;' }, [browseBtn])]),
+    ]));
+
+    // --- what's in the folder ---
+    const scanBox = el('div', { class: 'scan-box', hidden: 'hidden' });
+    card.appendChild(scanBox);
+
+    const modeSelect = el('select', {}, [
+      el('option', { value: 'existing', text: 'Use the existing files in this folder' }),
+      el('option', { value: 'install', text: 'Install a new project into this folder' }),
+    ]);
+    const frameworkSelect = el('select');
+    const modeField = el('label', { class: 'field' }, [el('span', { text: 'Project setup' }), modeSelect]);
+    const frameworkLabel = el('span', { text: 'Framework' });
+    const frameworkField = el('label', { class: 'field' }, [frameworkLabel, frameworkSelect]);
+    const frameworkHint = el('div', { class: 'faint', style: 'margin:-6px 0 12px; font-size:12px;' });
+    const docRootHint = el('div', { class: 'mono', style: 'margin:-4px 0 12px;' });
+
+    const mysqlInput = el('input', { type: 'password', placeholder: 'MySQL root password' });
+    const mysqlField = el('label', { class: 'field' }, [
+      el('span', { text: 'MySQL root password (used once to create the site\'s database and user)' }),
+      mysqlInput,
+    ]);
+    const fixPermsInput = el('input', { type: 'checkbox', checked: 'checked' });
+    const fixPermsField = el('label', { class: 'checkline' }, [fixPermsInput, 'Give Apache write access to the framework\'s cache/upload folders']);
+
+    [modeField, frameworkField, frameworkHint, docRootHint, mysqlField, fixPermsField].forEach((n) => card.appendChild(n));
+
+    const createBtn = el('button', { class: 'primary', text: 'Create Virtual Host' });
+    card.appendChild(createBtn);
+
+    const progressWrap = el('div', { hidden: 'hidden', style: 'margin-top:16px;' });
+    const stageLabel = el('div', { class: 'progress-label' }, [el('span', { text: 'Working…' }), el('span')]);
+    const fill = el('div', { class: 'progress-fill indeterminate' });
+    const logBox = el('div', { class: 'console' });
+    progressWrap.appendChild(el('div', { class: 'progress-wrap' }, [stageLabel, el('div', { class: 'progress-track' }, [fill])]));
+    progressWrap.appendChild(logBox);
+    card.appendChild(progressWrap);
+
+    let scan = null;
+
+    function logLine(text, cls = '') {
+      logBox.appendChild(el('div', { class: `line ${cls}`, text }));
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function fillFrameworkOptions() {
+      const mode = modeSelect.value;
+      const prev = frameworkSelect.value;
+      frameworkSelect.innerHTML = '';
+      if (mode === 'install') {
+        frameworkSelect.appendChild(el('option', { value: 'none', text: 'Nothing — just create an empty folder' }));
+        frameworkList.filter((f) => f.installable).forEach((f) => frameworkSelect.appendChild(el('option', { value: f.key, text: f.label })));
+        frameworkSelect.value = byKey[prev] && byKey[prev].installable ? prev : 'wordpress';
+      } else {
+        frameworkList.forEach((f) => {
+          const detected = scan && scan.framework === f.key;
+          frameworkSelect.appendChild(el('option', { value: f.key, text: detected ? `${f.label} (detected)` : f.label }));
+        });
+        frameworkSelect.value = scan && scan.framework ? scan.framework : 'php';
+      }
+      updateHints();
+    }
+
+    function updateHints() {
+      const dir = pathInput.value.trim().replace(/\/+$/, '');
+      const mode = modeSelect.value;
+      const key = frameworkSelect.value;
+      const fw = byKey[key];
+
+      frameworkLabel.textContent = mode === 'install' ? 'Framework to install' : 'Detected framework (change it if the scan got it wrong)';
+      frameworkHint.textContent = mode === 'install' && fw ? fw.description : '';
+      frameworkHint.hidden = !frameworkHint.textContent;
+
+      let rel = fw ? fw.docRoot : '';
+      if (mode === 'existing' && scan && key === scan.framework) rel = scan.docRootRel;
+      docRootHint.textContent = dir ? `Apache will serve: ${rel ? `${dir}/${rel}` : dir}` : '';
+      docRootHint.hidden = !dir;
+
+      mysqlField.hidden = !(mode === 'install' && fw && fw.needsMysql);
+      fixPermsField.hidden = !(mode === 'existing' && key !== 'php');
+      createBtn.textContent = mode === 'install' && fw ? `Install ${fw.label} & Create Virtual Host` : 'Create Virtual Host';
+    }
+
+    async function runScan() {
+      const dir = pathInput.value.trim();
+      scan = null;
+      scanBox.innerHTML = '';
+      if (!dir) { scanBox.hidden = true; modeField.hidden = frameworkField.hidden = true; updateHints(); return; }
+
+      const res = await window.api.site.detect(dir);
+      if (pathInput.value.trim() !== dir) return; // user kept typing
+      scanBox.hidden = false;
+      if (!res.ok) {
+        scanBox.appendChild(el('div', { class: 'pill missing', text: res.error }));
+        modeField.hidden = frameworkField.hidden = true;
+        return;
+      }
+      scan = res;
+      modeField.hidden = frameworkField.hidden = false;
+
+      if (res.empty) {
+        scanBox.appendChild(el('div', { class: 'pill active', text: res.exists ? 'Empty folder — you can install a new project here' : 'New folder — it will be created' }));
+        modeSelect.value = 'install';
+        modeSelect.querySelector('option[value="existing"]').disabled = true;
+      } else {
+        scanBox.appendChild(el('div', { class: 'pill installed', text: `Detected: ${res.label}` }));
+        modeSelect.value = 'existing';
+        modeSelect.querySelector('option[value="existing"]').disabled = false;
+        modeSelect.querySelector('option[value="install"]').disabled = true;
+      }
+      if (res.empty) modeSelect.querySelector('option[value="install"]').disabled = false;
+      (res.warnings || []).forEach((w) => scanBox.appendChild(el('div', { class: 'faint', style: 'margin-top:8px;', text: `⚠️ ${w}` })));
+      fillFrameworkOptions();
+    }
+
+    let scanTimer = null;
+    pathInput.addEventListener('input', () => { clearTimeout(scanTimer); scanTimer = setTimeout(runScan, 400); });
+    browseBtn.addEventListener('click', async () => {
+      const dir = await window.api.chooseFolder();
+      if (dir) { pathInput.value = dir; runScan(); }
+    });
+    modeSelect.addEventListener('change', fillFrameworkOptions);
+    frameworkSelect.addEventListener('change', updateHints);
+    modeField.hidden = frameworkField.hidden = true;
+    updateHints();
+
+    createBtn.addEventListener('click', async () => {
+      const domain = domainInput.value.trim();
+      const projectDir = pathInput.value.trim().replace(/\/+$/, '');
+      if (!domain || !projectDir) return toast('Enter a domain and folder', 'err');
+      if (!scan) return toast('Pick a valid project folder first', 'err');
+      const mode = modeSelect.value;
+      const framework = frameworkSelect.value;
+      if (!mysqlField.hidden && !mysqlInput.value) return toast('Enter the MySQL root password', 'err');
+
+      createBtn.disabled = true;
+      progressWrap.hidden = false;
+      logBox.innerHTML = '';
+      fill.className = 'progress-fill indeterminate';
+      stageLabel.children[0].textContent = 'Working…';
+      activeSiteLog = (evt) => {
+        if (evt.kind === 'stage') { stageLabel.children[0].textContent = evt.line; logLine(`▸ ${evt.line}`, 'ok'); }
+        else logLine(evt.line);
+      };
+      try {
+        const res = await window.api.vhost.create({
+          domain, projectDir, mode, framework,
+          mysqlRootPassword: mysqlInput.value,
+          fixPermissions: fixPermsInput.checked,
+        });
+        if (res.ok) {
+          fill.className = 'progress-fill';
+          fill.style.width = '100%';
+          stageLabel.children[0].textContent = `Done — http://${domain} is ready`;
+          logLine(`✓ Virtual host ${domain} → ${res.docRoot}`, 'ok');
+          (res.notes || []).forEach((n) => logLine(`• ${n}`));
+          toast(`Virtual host ${domain} created`, 'ok');
+          refreshVhostList();
+        } else {
+          fill.className = 'progress-fill';
+          fill.style.width = '100%';
+          stageLabel.children[0].textContent = 'Failed';
+          logLine(res.error || 'Failed to create virtual host', 'err');
+          toast(res.error || 'Failed to create virtual host', 'err');
+        }
+      } catch (e) {
+        logLine(e.message, 'err');
+        toast(e.message, 'err');
+      } finally {
+        activeSiteLog = null;
+        createBtn.disabled = false;
+      }
+    });
+
+    return card;
+  }
+
+  // ---------------- Delete dialog ----------------
+  async function openDeleteDialog(domain) {
+    const info = await window.api.vhost.inspect(domain);
+    if (!info.ok) return toast(info.error || 'Could not read virtual host', 'err');
+
+    const overlay = el('div', { class: 'modal-overlay' });
+    const modal = el('div', { class: 'modal' });
+    overlay.appendChild(modal);
+    const close = () => { if (!busy) overlay.remove(); };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    let busy = false;
+
+    modal.appendChild(el('h2', { text: `Delete ${domain}?` }));
+    const body = el('div', { class: 'body' });
+    modal.appendChild(body);
+
+    const facts = el('table', { class: 'facts' });
+    const fact = (k, v, cls = '') => facts.appendChild(el('tr', {}, [el('td', { class: 'faint', text: k }), el('td', { class: cls, text: v })]));
+    fact('Framework', info.framework || 'Unknown / plain PHP');
+    fact('Project folder', info.projectDir || '—', 'mono');
+    if (info.database && info.database.engine === 'mysql') {
+      fact('Database', `MySQL "${info.database.name}"${info.database.user ? ` · user "${info.database.user}"` : ''}${info.database.host ? ` · ${info.database.host}` : ''}`, 'mono');
+    } else if (info.database && info.database.engine === 'sqlite') {
+      fact('Database', `SQLite · ${info.database.path}`, 'mono');
+    } else {
+      fact('Database', 'None found');
+    }
+    body.appendChild(facts);
+
+    const option = (label, hint, disabledReason) => {
+      const input = el('input', { type: 'checkbox', ...(disabledReason ? { disabled: 'disabled' } : {}) });
+      const row = el('label', { class: `delete-option${disabledReason ? ' disabled' : ''}` }, [
+        input,
+        el('div', {}, [el('div', { text: label }), el('div', { class: 'faint', text: disabledReason || hint })]),
+      ]);
+      body.appendChild(row);
+      return input;
+    };
+
+    option('Remove the virtual host', 'Apache config and /etc/hosts entry. Always done.', null).checked = true;
+    body.lastChild.querySelector('input').disabled = true;
+
+    const filesBox = option(
+      'Delete all project files',
+      `Permanently deletes ${info.projectDir} and everything in it${info.database && info.database.engine === 'sqlite' ? ', including the SQLite database' : ''}. This cannot be undone.`,
+      info.filesBlocked ? `Not available: ${info.filesBlocked}` : null
+    );
+
+    const db = info.database && info.database.engine === 'mysql' ? info.database : null;
+    const dbBox = db
+      ? option(
+        `Drop the MySQL database "${db.name}"`,
+        'Deletes all its tables and data, plus its MySQL user if no other database uses it. This cannot be undone.',
+        db.droppable ? null : `Not available: ${db.reason}`
+      )
+      : null;
+
+    const pwInput = el('input', { type: 'password', placeholder: 'MySQL root password' });
+    const pwField = el('label', { class: 'field', hidden: 'hidden' }, [el('span', { text: 'MySQL root password' }), pwInput]);
+    body.appendChild(pwField);
+
+    const confirmInput = el('input', { type: 'text', placeholder: domain });
+    const confirmField = el('label', { class: 'field', hidden: 'hidden' }, [el('span', { text: `Type ${domain} to confirm` }), confirmInput]);
+    body.appendChild(confirmField);
+
+    const status = el('div', { class: 'console', style: 'height:110px;', hidden: 'hidden' });
+    body.appendChild(status);
+
+    const cancelBtn = el('button', { class: 'ghost', text: 'Cancel', onclick: close });
+    const deleteBtn = el('button', { class: 'danger', text: 'Delete virtual host' });
+    modal.appendChild(el('div', { class: 'actions' }, [cancelBtn, deleteBtn]));
+
+    function update() {
+      const files = filesBox.checked;
+      const drop = Boolean(dbBox && dbBox.checked);
+      pwField.hidden = !drop;
+      confirmField.hidden = !(files || drop);
+      deleteBtn.textContent = files && drop ? 'Delete everything' : files ? 'Delete site & files' : drop ? 'Delete site & database' : 'Delete virtual host';
+      deleteBtn.disabled = (files || drop) && confirmInput.value.trim() !== domain;
+    }
+    [filesBox, dbBox, confirmInput].filter(Boolean).forEach((n) => n.addEventListener('input', update));
+    [filesBox, dbBox].filter(Boolean).forEach((n) => n.addEventListener('change', update));
+    update();
+
+    deleteBtn.addEventListener('click', async () => {
+      const opts = { deleteFiles: filesBox.checked, dropDatabase: Boolean(dbBox && dbBox.checked), mysqlRootPassword: pwInput.value };
+      busy = true;
+      deleteBtn.disabled = cancelBtn.disabled = true;
+      status.hidden = false;
+      status.innerHTML = '';
+      const logLine = (text, cls = '') => { status.appendChild(el('div', { class: `line ${cls}`, text })); status.scrollTop = status.scrollHeight; };
+      activeSiteLog = (evt) => logLine(`▸ ${evt.line}`);
+      try {
+        const res = await window.api.vhost.delete(domain, opts);
+        (res.notes || []).forEach((n) => logLine(`• ${n}`, 'ok'));
+        if (res.ok) {
+          toast(`${domain} deleted`, 'ok');
+          busy = false;
+          overlay.remove();
+          refreshVhostList();
+        } else {
+          logLine(res.error || 'Delete failed', 'err');
+          toast(res.error || 'Delete failed', 'err');
+          busy = false;
+          cancelBtn.disabled = false;
+          update();
+          refreshVhostList();
+        }
+      } catch (e) {
+        logLine(e.message, 'err');
+        busy = false;
+        cancelBtn.disabled = false;
+        update();
+      } finally {
+        activeSiteLog = null;
+      }
+    });
+
+    document.body.appendChild(overlay);
   }
 
   // ---------------- Users & Groups ----------------
@@ -342,6 +630,7 @@ const Dashboard = (() => {
   }
 
   function init() {
+    window.api.site.onLog((evt) => activeSiteLog && activeSiteLog(evt));
     document.querySelectorAll('.sidebar .navitem').forEach((btn) => {
       btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
     });

@@ -27,9 +27,20 @@ contextBridge.exposeInMainWorld('api', {
 
   vhost: {
     list: () => invoke('vhost:list'),
-    create: (domain, docRoot) => invoke('vhost:create', { domain, docRoot }),
-    delete: (domain) => invoke('vhost:delete', { domain }),
+    // opts: { domain, projectDir, mode: 'existing'|'install', framework, mysqlRootPassword, fixPermissions }
+    create: (opts) => invoke('vhost:create', opts),
+    inspect: (domain) => invoke('vhost:inspect', { domain }),
+    // opts: { deleteFiles, dropDatabase, mysqlRootPassword }
+    delete: (domain, opts = {}) => invoke('vhost:delete', { domain, ...opts }),
     setEnabled: (domain, enabled) => invoke('vhost:setEnabled', { domain, enabled }),
+  },
+
+  site: {
+    frameworks: () => invoke('site:frameworks'),
+    detect: (dir) => invoke('site:detect', { dir }),
+    onLog: (cb) => {
+      ipcRenderer.on('site:log', (evt, payload) => cb(payload));
+    },
   },
 
   users: {
