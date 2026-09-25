@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.tejashingu.lampstand</id>
+
+  <name>Lampstand</name>
+  <summary>Local LAMP stack installer and virtual host manager</summary>
+
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+
+  <!-- Both spellings are included on purpose: AppStream &lt; 1.0 readers use
+       developer_name, 1.0+ readers use the developer element. -->
+  <developer id="com.tejashingu">
+    <name>Tejas Hingu</name>
+  </developer>
+  <developer_name>Tejas Hingu</developer_name>
+
+  <url type="homepage">https://tejashingu.com</url>
+  <url type="contact">https://tejashingu.com</url>
+
+  <launchable type="desktop-id">lampstand.desktop</launchable>
+
+  <description>
+    <p>
+      Lampstand turns a fresh Ubuntu machine into a local LAMP development server, then gives
+      you a GUI to manage it.
+    </p>
+    <p>
+      The setup wizard installs Apache, PHP (with the extensions WordPress, Drupal and Laravel
+      need), Node.js with a system-wide NVM, MySQL and phpMyAdmin — all from Ubuntu's official
+      apt repositories, skipping anything already installed.
+    </p>
+    <p>Afterwards the dashboard lets you:</p>
+    <ul>
+      <li>Map any project folder to a local domain as an Apache virtual host</li>
+      <li>Grant system users write access to the web root via the www-data group</li>
+      <li>Audit and fix ownership and permissions under /var/www/html</li>
+      <li>Start, stop and restart Apache and MySQL, and control whether they start on boot</li>
+    </ul>
+  </description>
+
+  <categories>
+    <category>System</category>
+    <category>Development</category>
+  </categories>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="1.0.1" date="2026-09-26" />
+    <release version="1.0.0" date="2026-09-11" />
+  </releases>
+</component>

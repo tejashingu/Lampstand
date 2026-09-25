@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Lampstand (Admin)
+Comment=Lampstand with full privileges (apt, systemctl, chown, usermod, ...) via a graphical password prompt
+Exec=pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY /opt/Lampstand/lampstand --no-sandbox %U
+Terminal=false
+Type=Application
+Icon=lampstand
+Categories=System;Development;
+StartupWMClass=lampstand

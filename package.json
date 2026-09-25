@@ -1,0 +1,72 @@
+{
+  "name": "lampstand",
+  "productName": "Lampstand",
+  "version": "1.0.1",
+  "description": "Modern local LAMP stack installer and virtual host manager for Ubuntu",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron . --no-sandbox",
+    "dist": "electron-builder"
+  },
+  "author": "Tejas Hingu <tejas@tejashingu.com>",
+  "homepage": "https://tejashingu.com",
+  "license": "MIT",
+  "icon": "build/icon.png",
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.tejashingu.lampstand",
+    "productName": "Lampstand",
+    "icon": "build/icon.png",
+    "files": [
+      "main.js",
+      "preload.js",
+      "backend/**/*",
+      "renderer/**/*",
+      "build/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "build/lampstand-admin.desktop",
+        "to": "lampstand-admin.desktop"
+      }
+    ],
+    "extraFiles": [
+      {
+        "from": "build/com.tejashingu.lampstand.metainfo.xml",
+        "to": "usr/share/metainfo/com.tejashingu.lampstand.metainfo.xml"
+      }
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "executableName": "lampstand",
+      "category": "System",
+      "icon": "build/icons",
+      "desktop": {
+        "StartupWMClass": "lampstand"
+      }
+    },
+    "deb": {
+      "depends": [
+        "apt",
+        "pkexec | policykit-1",
+        "libgtk-3-0t64 | libgtk-3-0",
+        "libatspi2.0-0t64 | libatspi2.0-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "libsecret-1-0",
+        "xdg-utils"
+      ],
+      "afterInstall": "build/deb-after-install.sh",
+      "afterRemove": "build/deb-after-remove.sh"
+    }
+  },
+  "desktopName": "lampstand.desktop"
+}
