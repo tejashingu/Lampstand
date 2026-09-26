@@ -12,6 +12,7 @@ const permissions = require('./backend/permissions');
 const services = require('./backend/services');
 const autostart = require('./backend/autostart');
 const frameworks = require('./backend/frameworks');
+const vhostFilters = require('./backend/vhostFilters');
 
 if (isRoot()) {
   app.commandLine.appendSwitch('no-sandbox');
@@ -195,6 +196,12 @@ ipcMain.handle('vhost:setEnabled', (evt, { domain, enabled }) => {
   requireRoot();
   return apache.setVhostEnabled(domain, enabled);
 });
+ipcMain.handle('vhostGroups:get', () => vhostFilters.get());
+ipcMain.handle('vhostGroups:saveGroups', (evt, { groups }) => {
+  requireRoot();
+  return vhostFilters.saveGroups(groups);
+});
+ipcMain.handle('vhostGroups:saveView', (evt, { view }) => vhostFilters.saveView(view));
 
 // ---- users ----
 ipcMain.handle('users:list', () => users.listUsersWithGroups());

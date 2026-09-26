@@ -104,41 +104,228 @@ const Dashboard = (() => {
     await refreshVhostList();
   }
 
+  // Group filter state. Groups are shared by all logins; the default group and
+  // hidden sites belong to whoever launched Lampstand.
+  let groupState = null;      // { user, canEditGroups, groups, defaultFilter, hidden }
+  let currentFilter = null;   // 'all' | 'ungrouped' | group id — this session only
+  let showHidden = false;
+
+  const groupOf = (domain) => groupState.groups.find((g) => g.domains.includes(domain)) || null;
+
+  async function saveGroups(groups) {
+    const res = await window.api.vhostGroups.saveGroups(groups);
+    if (!res.ok) { toast(res.error || 'Could not save groups', 'err'); return false; }
+    groupState.groups = res.groups;
+    return true;
+  }
+
+  async function saveView(patch) {
+    const res = await window.api.vhostGroups.saveView({ defaultFilter: groupState.defaultFilter, hidden: groupState.hidden, ...patch });
+    if (!res.ok) { toast(res.error || 'Could not save', 'err'); return false; }
+    groupState.defaultFilter = res.defaultFilter;
+    groupState.hidden = res.hidden;
+    return true;
+  }
+
+  // Moves a site into a group (or out of all groups when groupId is null).
+  function withSiteInGroup(domain, groupId) {
+    return groupState.groups.map((g) => ({
+      ...g,
+      domains: g.id === groupId ? [...g.domains.filter((d) => d !== domain), domain] : g.domains.filter((d) => d !== domain),
+    }));
+  }
+
+  // A newly created site joins whichever group is being viewed.
+  async function addNewSiteToCurrentGroup(domain) {
+    if (!groupState || !groupState.canEditGroups) return;
+    if (!groupState.groups.some((g) => g.id === currentFilter)) return;
+    await saveGroups(withSiteInGroup(domain, currentFilter));
+  }
+
+  function openGroupNameDialog(title, initial, submitLabel, onSubmit) {
+    const overlay = el('div', { class: 'modal-overlay' });
+    const input = el('input', { type: 'text', value: initial, maxlength: '40', placeholder: 'e.g. Client projects' });
+    const okBtn = el('button', { class: 'primary', text: submitLabel });
+    const close = () => overlay.remove();
+    const submit = async () => {
+      const name = input.value.trim();
+      if (!name) return input.focus();
+      if (groupState.groups.some((g) => g.name.toLowerCase() === name.toLowerCase() && g.name !== initial)) {
+        return toast(`A group named "${name}" already exists`, 'err');
+      }
+      okBtn.disabled = true;
+      if (await onSubmit(name)) close();
+      else okBtn.disabled = false;
+    };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') close(); });
+    okBtn.addEventListener('click', submit);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.appendChild(el('div', { class: 'modal' }, [
+      el('h2', { text: title }),
+      el('div', { class: 'body' }, [el('label', { class: 'field' }, [el('span', { text: 'Group name' }), input])]),
+      el('div', { class: 'actions' }, [el('button', { class: 'ghost', text: 'Cancel', onclick: close }), okBtn]),
+    ]));
+    document.body.appendChild(overlay);
+    input.focus();
+    input.select();
+  }
+
+  function openDeleteGroupDialog(group) {
+    const overlay = el('div', { class: 'modal-overlay' });
+    const close = () => overlay.remove();
+    const delBtn = el('button', { class: 'danger', text: 'Delete group' });
+    delBtn.addEventListener('click', async () => {
+      delBtn.disabled = true;
+      if (!(await saveGroups(groupState.groups.filter((g) => g.id !== group.id)))) { delBtn.disabled = false; return; }
+      if (groupState.defaultFilter === group.id) await saveView({ defaultFilter: 'all' });
+      currentFilter = 'all';
+      toast(`Group "${group.name}" deleted`, 'ok');
+      close();
+      refreshVhostList();
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.appendChild(el('div', { class: 'modal' }, [
+      el('h2', { text: `Delete group "${group.name}"?` }),
+      el('div', { class: 'body', text: `Its ${group.domains.length} site${group.domains.length === 1 ? '' : 's'} move to Ungrouped. The sites themselves aren't touched. This affects every user on this machine.` }),
+      el('div', { class: 'actions' }, [el('button', { class: 'ghost', text: 'Cancel', onclick: close }), delBtn]),
+    ]));
+    document.body.appendChild(overlay);
+  }
+
+  function groupToolbar(vhosts) {
+    const { groups, defaultFilter, canEditGroups } = groupState;
+    const current = groups.find((g) => g.id === currentFilter) || null;
+    const star = (id) => (id === defaultFilter ? '  ★' : '');
+    const inGroup = new Set(groups.flatMap((g) => g.domains));
+
+    const select = el('select', { style: 'width:auto; min-width:200px;' }, [
+      el('option', { value: 'all', text: `All sites (${vhosts.length})${star('all')}` }),
+      ...groups.map((g) => el('option', { value: g.id, text: `${g.name} (${g.domains.length})${star(g.id)}` })),
+      el('option', { value: 'ungrouped', text: `Ungrouped (${vhosts.filter((v) => !inGroup.has(v.domain)).length})${star('ungrouped')}` }),
+    ]);
+    select.value = currentFilter;
+    select.addEventListener('change', (e) => { currentFilter = e.target.value; refreshVhostList(); });
+
+    const defaultBtn = el('button', {
+      class: 'small', text: currentFilter === defaultFilter ? '★ Default view' : '☆ Set as default',
+      title: 'Open this group by default when you launch Lampstand',
+      ...(currentFilter === defaultFilter ? { disabled: 'disabled' } : {}),
+    });
+    defaultBtn.addEventListener('click', async () => {
+      if (await saveView({ defaultFilter: currentFilter })) { toast('Default view saved', 'ok'); refreshVhostList(); }
+    });
+
+    const editAttrs = canEditGroups ? {} : { disabled: 'disabled', title: 'Editing groups needs Lampstand running as root' };
+    const newBtn = el('button', { class: 'small', text: '+ New group', ...editAttrs });
+    newBtn.addEventListener('click', () => openGroupNameDialog('New group', '', 'Create group', async (name) => {
+      const id = `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      if (!(await saveGroups([...groupState.groups, { id, name, domains: [] }]))) return false;
+      currentFilter = id;
+      toast(`Group "${name}" created — assign sites from the Group column`, 'ok');
+      refreshVhostList();
+      return true;
+    }));
+
+    const tools = [select, defaultBtn, newBtn];
+    if (current) {
+      const renameBtn = el('button', { class: 'small', text: 'Rename', ...editAttrs });
+      renameBtn.addEventListener('click', () => openGroupNameDialog('Rename group', current.name, 'Rename', async (name) => {
+        if (!(await saveGroups(groupState.groups.map((g) => (g.id === current.id ? { ...g, name } : g))))) return false;
+        refreshVhostList();
+        return true;
+      }));
+      const delBtn = el('button', { class: 'small danger', text: 'Delete group', ...editAttrs });
+      delBtn.addEventListener('click', () => openDeleteGroupDialog(current));
+      tools.push(renameBtn, delBtn);
+    }
+
+    const hiddenCount = groupState.hidden.length;
+    const hiddenBox = el('input', { type: 'checkbox', ...(showHidden ? { checked: 'checked' } : {}) });
+    hiddenBox.addEventListener('change', (e) => { showHidden = e.target.checked; refreshVhostList(); });
+
+    return el('div', { class: 'group-toolbar' }, [
+      el('div', { class: 'tools' }, tools),
+      el('label', { class: 'checkline', style: 'margin:0;' }, [hiddenBox, `Show hidden (${hiddenCount})`]),
+    ]);
+  }
+
   // Redraws only the list, so the create form's log stays visible.
   async function refreshVhostList() {
-    const vhosts = await window.api.vhost.list();
+    const [vhosts, groups] = await Promise.all([window.api.vhost.list(), window.api.vhostGroups.get()]);
+    groupState = groups;
+    const validFilters = ['all', 'ungrouped', ...groupState.groups.map((g) => g.id)];
+    if (!validFilters.includes(currentFilter)) currentFilter = groupState.defaultFilter;
+
+    const inGroup = new Set(groupState.groups.flatMap((g) => g.domains));
+    const hidden = new Set(groupState.hidden);
+    const current = groupState.groups.find((g) => g.id === currentFilter);
+    const inFilter = vhosts.filter((v) => (currentFilter === 'all' ? true
+      : currentFilter === 'ungrouped' ? !inGroup.has(v.domain)
+        : current.domains.includes(v.domain)));
+    const shown = inFilter.filter((v) => showHidden || !hidden.has(v.domain));
+    const hiddenHere = inFilter.length - inFilter.filter((v) => !hidden.has(v.domain)).length;
+
     const listCard = vhostListCard;
     listCard.innerHTML = '';
-    listCard.appendChild(el('h2', { text: `Existing virtual hosts (${vhosts.length})` }));
-    if (!vhosts.length) {
-      listCard.appendChild(el('div', { class: 'empty', text: 'No virtual hosts yet — create one above.' }));
-    } else {
-      const table = el('table');
-      table.appendChild(el('tr', {}, [
-        el('th', { text: 'Domain' }), el('th', { text: 'Framework' }), el('th', { text: 'Document Root' }), el('th', { text: 'Enabled' }), el('th', { text: '' }),
-      ]));
-      vhosts.forEach((v) => {
-        const toggle = el('label', { class: 'switch' }, [
-          el('input', { type: 'checkbox', ...(v.enabled ? { checked: 'checked' } : {}) }),
-          el('span', { class: 'slider' }),
-        ]);
-        toggle.querySelector('input').addEventListener('change', async (e) => {
-          const res = await window.api.vhost.setEnabled(v.domain, e.target.checked);
-          if (!res.ok) { toast(res.error || 'Failed', 'err'); e.target.checked = !e.target.checked; }
-          else toast(`${v.domain} ${e.target.checked ? 'enabled' : 'disabled'}`, 'ok');
-        });
-        const delBtn = el('button', { class: 'danger small', text: 'Delete' });
-        delBtn.addEventListener('click', () => openDeleteDialog(v.domain));
-        table.appendChild(el('tr', {}, [
-          el('td', {}, [el('strong', { text: v.domain })]),
-          el('td', { class: v.framework ? '' : 'faint', text: v.framework || '—' }),
-          el('td', { class: 'mono', text: v.docRoot }),
-          el('td', {}, [toggle]),
-          el('td', {}, [delBtn]),
-        ]));
-      });
-      listCard.appendChild(table);
+    listCard.appendChild(el('h2', { text: `Existing virtual hosts (${shown.length}${shown.length !== vhosts.length ? ` of ${vhosts.length}` : ''})` }));
+    listCard.appendChild(groupToolbar(vhosts));
+
+    if (!shown.length) {
+      const msg = !vhosts.length ? 'No virtual hosts yet — create one above.'
+        : hiddenHere ? `All ${hiddenHere} site${hiddenHere === 1 ? '' : 's'} in this view ${hiddenHere === 1 ? 'is' : 'are'} hidden — tick "Show hidden" to see ${hiddenHere === 1 ? 'it' : 'them'}.`
+          : currentFilter === 'ungrouped' ? 'Every site is in a group.'
+            : 'No sites in this group yet — pick "All sites" and assign some from the Group column.';
+      listCard.appendChild(el('div', { class: 'empty', text: msg }));
+      return;
     }
+
+    const table = el('table');
+    table.appendChild(el('tr', {}, [
+      el('th', { text: 'Domain' }), el('th', { text: 'Group' }), el('th', { text: 'Framework' }), el('th', { text: 'Document Root' }), el('th', { text: 'Enabled' }), el('th', { text: '' }),
+    ]));
+    shown.forEach((v) => {
+      const toggle = el('label', { class: 'switch' }, [
+        el('input', { type: 'checkbox', ...(v.enabled ? { checked: 'checked' } : {}) }),
+        el('span', { class: 'slider' }),
+      ]);
+      toggle.querySelector('input').addEventListener('change', async (e) => {
+        const res = await window.api.vhost.setEnabled(v.domain, e.target.checked);
+        if (!res.ok) { toast(res.error || 'Failed', 'err'); e.target.checked = !e.target.checked; }
+        else toast(`${v.domain} ${e.target.checked ? 'enabled' : 'disabled'}`, 'ok');
+      });
+
+      const group = groupOf(v.domain);
+      const groupSelect = el('select', { class: 'compact', ...(groupState.canEditGroups ? {} : { disabled: 'disabled' }) }, [
+        el('option', { value: '', text: '— none —' }),
+        ...groupState.groups.map((g) => el('option', { value: g.id, text: g.name })),
+      ]);
+      groupSelect.value = group ? group.id : '';
+      groupSelect.addEventListener('change', async (e) => {
+        if (await saveGroups(withSiteInGroup(v.domain, e.target.value || null))) refreshVhostList();
+        else e.target.value = group ? group.id : '';
+      });
+
+      const isHidden = hidden.has(v.domain);
+      const hideBtn = el('button', { class: 'small', text: isHidden ? 'Show' : 'Hide', title: isHidden ? 'Show this site in the list again' : 'Hide from the list (the site keeps running)' });
+      hideBtn.addEventListener('click', async () => {
+        const next = isHidden ? groupState.hidden.filter((d) => d !== v.domain) : [...groupState.hidden, v.domain];
+        if (await saveView({ hidden: next })) {
+          toast(isHidden ? `${v.domain} is visible again` : `${v.domain} hidden — tick "Show hidden" to see it`, 'ok');
+          refreshVhostList();
+        }
+      });
+      const delBtn = el('button', { class: 'danger small', text: 'Delete' });
+      delBtn.addEventListener('click', () => openDeleteDialog(v.domain));
+      table.appendChild(el('tr', { class: isHidden ? 'is-hidden' : '' }, [
+        el('td', {}, [el('strong', { text: v.domain }), isHidden ? el('span', { class: 'faint', text: '  (hidden)' }) : null]),
+        el('td', {}, [groupSelect]),
+        el('td', { class: v.framework ? '' : 'faint', text: v.framework || '—' }),
+        el('td', { class: 'mono', text: v.docRoot }),
+        el('td', {}, [toggle]),
+        el('td', {}, [el('div', { class: 'actions-inline' }, [hideBtn, delBtn])]),
+      ]));
+    });
+    listCard.appendChild(table);
   }
 
   // Single site:log listener, dispatched to whichever form is mounted.
@@ -316,6 +503,7 @@ const Dashboard = (() => {
           logLine(`✓ Virtual host ${domain} → ${res.docRoot}`, 'ok');
           (res.notes || []).forEach((n) => logLine(`• ${n}`));
           toast(`Virtual host ${domain} created`, 'ok');
+          await addNewSiteToCurrentGroup(domain);
           refreshVhostList();
         } else {
           fill.className = 'progress-fill';

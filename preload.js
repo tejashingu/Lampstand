@@ -35,6 +35,15 @@ contextBridge.exposeInMainWorld('api', {
     setEnabled: (domain, enabled) => invoke('vhost:setEnabled', { domain, enabled }),
   },
 
+  // Named groups for filtering the vhost list (shared), plus this login's
+  // default group and hidden sites.
+  vhostGroups: {
+    get: () => invoke('vhostGroups:get'),
+    saveGroups: (groups) => invoke('vhostGroups:saveGroups', { groups }),
+    // view: { defaultFilter, hidden }
+    saveView: (view) => invoke('vhostGroups:saveView', { view }),
+  },
+
   site: {
     frameworks: () => invoke('site:frameworks'),
     detect: (dir) => invoke('site:detect', { dir }),
