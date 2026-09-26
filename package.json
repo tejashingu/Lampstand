@@ -1,8 +1,26 @@
 {
   "name": "lampstand",
   "productName": "Lampstand",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Modern local LAMP stack installer and virtual host manager for Ubuntu",
+  "keywords": [
+    "lamp",
+    "lamp-stack",
+    "ubuntu",
+    "apache",
+    "php",
+    "mysql",
+    "phpmyadmin",
+    "nvm",
+    "nodejs",
+    "virtual-host",
+    "vhost",
+    "local-development",
+    "wordpress",
+    "laravel",
+    "electron",
+    "xampp-alternative"
+  ],
   "main": "main.js",
   "scripts": {
     "start": "electron . --no-sandbox",
@@ -10,6 +28,13 @@
   },
   "author": "Tejas Hingu <tejas@tejashingu.com>",
   "homepage": "https://tejashingu.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tejashingu/Lampstand.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tejashingu/Lampstand/issues"
+  },
   "license": "MIT",
   "icon": "build/icon.png",
   "devDependencies": {

@@ -119,6 +119,7 @@ const Wizard = (() => {
     container.appendChild(el('div', { class: 'card' }, [
       el('h2', { text: 'Set up your local development server' }),
       el('p', { class: 'muted', text: 'This wizard installs Apache, PHP (with WordPress/Drupal/Laravel extensions), Node.js, MySQL and phpMyAdmin from your Ubuntu system\'s official apt repositories. Anything already installed is detected automatically and skipped.' }),
+      el('div', { class: 'notice warn', text: 'Lampstand is currently optimized only for Ubuntu and Ubuntu-based systems (Kubuntu, Xubuntu, Ubuntu MATE, Linux Mint, Pop!_OS, ...). On other distributions, including plain Debian, some install steps will fail.' }),
       el('p', { class: 'muted', text: 'After setup you\'ll be able to map folders to virtual hosts, manage www-data access for any user, and audit /var/www/html permissions — all from the dashboard.' }),
     ]));
     const { row } = navRow({ hideBack: true, nextLabel: 'Get Started →' });
@@ -142,7 +143,7 @@ const Wizard = (() => {
     const os = await window.api.getOsInfo();
     state.osInfo = os;
     document.getElementById('osBadge').textContent = os.prettyName;
-    info.textContent = os.isUbuntu ? `Detected ${os.prettyName} ✓` : `${os.prettyName} — this tool targets Ubuntu, some steps may not apply.`;
+    info.textContent = os.isUbuntu ? `Detected ${os.prettyName} ✓` : `${os.prettyName} — Lampstand is only optimized for Ubuntu and Ubuntu-based systems; some install steps may fail here.`;
 
     if (!(await window.api.isRoot())) {
       prog.set(0, 'Skipped (not root)');

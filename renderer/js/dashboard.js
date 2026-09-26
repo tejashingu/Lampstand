@@ -15,6 +15,7 @@ const Dashboard = (() => {
     if (activeTab === 'users') return renderUsers(content);
     if (activeTab === 'permissions') return renderPermissions(content);
     if (activeTab === 'services') return renderServices(content);
+    if (activeTab === 'about') return renderAbout(content);
   }
 
   // ---------------- Overview ----------------
@@ -815,6 +816,58 @@ const Dashboard = (() => {
       grid.appendChild(card);
     }
     content.appendChild(grid);
+  }
+
+  // ---------------- About ----------------
+  async function renderAbout(content) {
+    const version = await window.api.getVersion();
+    content.innerHTML = '';
+    content.appendChild(el('h1', { class: 'page-title', text: 'About' }));
+    content.appendChild(el('p', { class: 'page-sub', text: 'Local LAMP stack installer and virtual host manager for Ubuntu.' }));
+
+    // Opening a browser can fail when running as root; fall back to copying the link.
+    const link = (label, url) => el('a', {
+      class: 'link',
+      href: '#',
+      text: label,
+      onclick: async (e) => {
+        e.preventDefault();
+        const res = await window.api.openExternal(url);
+        if (res.ok) return;
+        try {
+          await navigator.clipboard.writeText(label);
+          toast(`Couldn't open a browser — copied ${label} to the clipboard`, 'ok');
+        } catch {
+          toast(res.error || 'Could not open link', 'err');
+        }
+      },
+    });
+
+    const facts = el('table', { class: 'facts' });
+    const fact = (label, value) => facts.appendChild(el('tr', {}, [el('td', { class: 'faint', text: label }), el('td', {}, [value])]));
+    fact('Version', version);
+    fact('Author', 'Tejas Hingu');
+    fact('Email', link('tejas@tejashingu.com', 'mailto:tejas@tejashingu.com'));
+    fact('Website', link('tejashingu.com', 'https://tejashingu.com'));
+    fact('Source', link('github.com/tejashingu/Lampstand', 'https://github.com/tejashingu/Lampstand'));
+    fact('Report a bug', link('github.com/tejashingu/Lampstand/issues', 'https://github.com/tejashingu/Lampstand/issues'));
+    fact('License', 'MIT');
+
+    content.appendChild(el('div', { class: 'card' }, [
+      el('div', { class: 'about-head' }, [
+        el('img', { src: 'assets/logo.png', alt: '', class: 'about-logo' }),
+        el('div', {}, [
+          el('h2', { text: 'Lampstand' }),
+          el('div', { class: 'faint', text: `Version ${version}` }),
+        ]),
+      ]),
+      facts,
+    ]));
+
+    content.appendChild(el('div', { class: 'card' }, [
+      el('h2', { text: 'Privacy' }),
+      el('p', { class: 'sub', text: 'Lampstand does not collect any telemetry, analytics or usage data, and has no crash reporting or update check. It only goes online for actions you start, and only to official sources: Ubuntu\'s apt repositories, wordpress.org for WordPress, Packagist (Composer) for the official Laravel, Symfony, Drupal and other starter projects, the npm registry for their frontend dependencies, and NVM\'s GitHub repository.' }),
+    ]));
   }
 
   function init() {

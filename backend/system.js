@@ -42,7 +42,9 @@ async function getOsInfo() {
     version: get('VERSION') || '',
     id: get('ID') || '',
     prettyName: get('PRETTY_NAME') || 'Unknown Linux',
-    isUbuntu: get('ID') === 'ubuntu',
+    // Official flavours (Kubuntu, Xubuntu, ...) report ID=ubuntu; derivatives built on the
+    // Ubuntu archive (Linux Mint, Pop!_OS, Zorin, ...) list it in ID_LIKE.
+    isUbuntu: get('ID') === 'ubuntu' || get('ID_LIKE').split(' ').includes('ubuntu'),
   };
 }
 

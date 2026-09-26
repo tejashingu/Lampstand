@@ -299,3 +299,15 @@ p.page-sub { color: var(--text-dim); margin: 0 0 22px; font-size: 13px; }
 .group-toolbar .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 select.compact { width: auto; max-width: 170px; padding: 5px 8px; font-size: 12px; }
 tr.is-hidden td { opacity: 0.55; }
+
+/* About tab */
+.about-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.about-head h2 { margin: 0 0 2px; }
+.about-logo { width: 56px; height: 56px; }
+table.facts td { padding: 6px 12px 6px 0; border: none; }
+table.facts td:first-child { width: 110px; white-space: nowrap; }
+a.link { color: var(--accent); text-decoration: none; }
+a.link:hover { text-decoration: underline; }
+
+.notice { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; line-height: 1.5; margin: 12px 0; }
+.notice.warn { background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); color: var(--warning); }

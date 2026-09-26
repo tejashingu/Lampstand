@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell } = require('electron');
 const path = require('path');
 
 const { isRoot } = require('./backend/exec');
@@ -105,6 +105,17 @@ function requireRoot() {
 ipcMain.handle('app:isRoot', () => isRoot());
 ipcMain.handle('app:getOsInfo', () => system.getOsInfo());
 ipcMain.handle('app:checkStack', () => system.checkStack());
+ipcMain.handle('app:getVersion', () => app.getVersion());
+// Only web and mail links (used by the About tab) — never file:// or other schemes.
+ipcMain.handle('app:openExternal', async (evt, { url }) => {
+  if (!/^(https:|mailto:)/.test(String(url))) return { ok: false, error: 'Unsupported link' };
+  try {
+    await shell.openExternal(url);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
 ipcMain.handle('dialog:chooseFolder', async () => {
   const res = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'createDirectory'] });
   if (res.canceled || !res.filePaths.length) return null;

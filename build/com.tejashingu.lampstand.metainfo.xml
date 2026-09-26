@@ -17,6 +17,8 @@
 
   <url type="homepage">https://tejashingu.com</url>
   <url type="contact">https://tejashingu.com</url>
+  <url type="bugtracker">https://github.com/tejashingu/Lampstand/issues</url>
+  <url type="vcs-browser">https://github.com/tejashingu/Lampstand</url>
 
   <launchable type="desktop-id">lampstand.desktop</launchable>
 
@@ -44,9 +46,37 @@
     <category>Development</category>
   </categories>
 
+  <screenshots>
+    <screenshot type="default">
+      <caption>Overview of the local server stack</caption>
+      <image>https://raw.githubusercontent.com/tejashingu/Lampstand/main/docs/screenshots/overview.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Setup wizard</caption>
+      <image>https://raw.githubusercontent.com/tejashingu/Lampstand/main/docs/screenshots/setup-wizard.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Managing virtual hosts</caption>
+      <image>https://raw.githubusercontent.com/tejashingu/Lampstand/main/docs/screenshots/virtual-hosts.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Auditing and fixing web root permissions</caption>
+      <image>https://raw.githubusercontent.com/tejashingu/Lampstand/main/docs/screenshots/permissions.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Managing www-data and nvm group membership</caption>
+      <image>https://raw.githubusercontent.com/tejashingu/Lampstand/main/docs/screenshots/users-groups.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Controlling Apache and MySQL services</caption>
+      <image>https://raw.githubusercontent.com/tejashingu/Lampstand/main/docs/screenshots/services.png</image>
+    </screenshot>
+  </screenshots>
+
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="1.2.1" date="2026-09-27" />
     <release version="1.2.0" date="2026-09-26" />
     <release version="1.1.0" date="2026-09-26" />
     <release version="1.0.1" date="2026-09-26" />

@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('api', {
   isRoot: () => invoke('app:isRoot'),
   getOsInfo: () => invoke('app:getOsInfo'),
   checkStack: () => invoke('app:checkStack'),
+  getVersion: () => invoke('app:getVersion'),
+  openExternal: (url) => invoke('app:openExternal', { url }),
   chooseFolder: () => invoke('dialog:chooseFolder'),
 
   install: {
