@@ -11,6 +11,8 @@ const users = require('./backend/users');
 const permissions = require('./backend/permissions');
 const services = require('./backend/services');
 const autostart = require('./backend/autostart');
+const frameworks = require('./backend/frameworks');
+const vhostFilters = require('./backend/vhostFilters');
 
 if (isRoot()) {
   app.commandLine.appendSwitch('no-sandbox');
@@ -169,18 +171,37 @@ ipcMain.handle('install:phpmyadmin', async (evt, { mysqlRootPassword, appPasswor
 
 // ---- vhosts ----
 ipcMain.handle('vhost:list', () => apache.listVhosts());
-ipcMain.handle('vhost:create', (evt, { domain, docRoot }) => {
+ipcMain.handle('vhost:create', async (evt, opts) => {
   requireRoot();
-  return apache.createVhost(domain, docRoot);
+  const onData = (e) => sendProgress('site:log', e);
+  const site = await frameworks.prepareSite(opts, onData);
+  if (!site.ok) return site;
+  onData({ stream: 'stdout', line: 'Creating Apache virtual host...', kind: 'stage' });
+  const vhost = await apache.createVhost(opts.domain, site.docRoot, {
+    frameworkLabel: site.label,
+    frameworkKey: site.framework,
+    projectDir: opts.projectDir.replace(/\/+$/, ''),
+  });
+  if (!vhost.ok) return vhost;
+  return { ok: true, docRoot: site.docRoot, framework: site.label, notes: [...site.notes, ...vhost.warnings] };
 });
-ipcMain.handle('vhost:delete', (evt, { domain }) => {
+ipcMain.handle('site:frameworks', () => frameworks.listFrameworks());
+ipcMain.handle('site:detect', (evt, { dir }) => frameworks.detect(dir));
+ipcMain.handle('vhost:inspect', (evt, { domain }) => apache.inspectVhost(domain));
+ipcMain.handle('vhost:delete', (evt, { domain, ...opts }) => {
   requireRoot();
-  return apache.deleteVhost(domain);
+  return apache.deleteVhost(domain, opts, (e) => sendProgress('site:log', e));
 });
 ipcMain.handle('vhost:setEnabled', (evt, { domain, enabled }) => {
   requireRoot();
   return apache.setVhostEnabled(domain, enabled);
 });
+ipcMain.handle('vhostGroups:get', () => vhostFilters.get());
+ipcMain.handle('vhostGroups:saveGroups', (evt, { groups }) => {
+  requireRoot();
+  return vhostFilters.saveGroups(groups);
+});
+ipcMain.handle('vhostGroups:saveView', (evt, { view }) => vhostFilters.saveView(view));
 
 // ---- users ----
 ipcMain.handle('users:list', () => users.listUsersWithGroups());

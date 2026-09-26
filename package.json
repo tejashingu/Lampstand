@@ -1,7 +1,7 @@
 {
   "name": "lampstand",
   "productName": "Lampstand",
-  "version": "1.0.1",
+  "version": "1.2.0",
   "description": "Modern local LAMP stack installer and virtual host manager for Ubuntu",
   "main": "main.js",
   "scripts": {
