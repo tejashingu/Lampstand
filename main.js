@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell } = require('electron');
 const path = require('path');
+const net = require('net');
 
 const { isRoot } = require('./backend/exec');
 const system = require('./backend/system');
@@ -13,6 +14,10 @@ const services = require('./backend/services');
 const autostart = require('./backend/autostart');
 const frameworks = require('./backend/frameworks');
 const vhostFilters = require('./backend/vhostFilters');
+
+// Node's fetch races IPv4/IPv6 with a 250ms per-address timeout, which fails on
+// slow links or hosts with broken IPv6 ("fetch failed") even though curl works.
+net.setDefaultAutoSelectFamilyAttemptTimeout(2500);
 
 if (isRoot()) {
   app.commandLine.appendSwitch('no-sandbox');

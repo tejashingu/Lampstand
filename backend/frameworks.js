@@ -305,7 +305,8 @@ async function installWordpress(dir, owner, { domain, mysqlRootPassword }, log, 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     buf = Buffer.from(await res.arrayBuffer());
   } catch (e) {
-    return { ok: false, error: `Download failed: ${e.message}` };
+    const cause = e.cause?.code || e.cause?.message;
+    return { ok: false, error: `Download failed: ${e.message}${cause ? ` (${cause})` : ''}` };
   }
   const tarball = path.join(os.tmpdir(), `lampstand-wordpress-${Date.now()}.tar.gz`);
   fs.writeFileSync(tarball, buf, { mode: 0o644 });

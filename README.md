@@ -106,9 +106,9 @@ npm run dist
 
 `electron-builder` (already configured in `package.json`) produces two artifacts in `dist/`:
 
-- **`Lampstand-1.2.1.AppImage`** — a single portable executable, no installation needed.
+- **`Lampstand-1.2.2.AppImage`** — a single portable executable, no installation needed.
   `chmod +x` it and double-click, or run it from a terminal.
-- **`lampstand_1.2.1_amd64.deb`** — a normal Debian package for `sudo apt install ./lampstand_*.deb`
+- **`lampstand_1.2.2_amd64.deb`** — a normal Debian package for `sudo apt install ./lampstand_*.deb`
   or `sudo dpkg -i` (installs to `/opt/Lampstand`).
 
 The app menu icon these create launches Lampstand **unprivileged** — you get the dashboard
@@ -143,8 +143,8 @@ Users download from the
 [Releases page](https://github.com/tejashingu/Lampstand/releases/latest), or from a terminal:
 
 ```bash
-wget https://github.com/tejashingu/Lampstand/releases/download/v1.2.1/lampstand_1.2.1_amd64.deb
-sudo apt install ./lampstand_1.2.1_amd64.deb
+wget https://github.com/tejashingu/Lampstand/releases/download/v1.2.2/lampstand_1.2.2_amd64.deb
+sudo apt install ./lampstand_1.2.2_amd64.deb
 ```
 
 ### 3. Further options (not set up yet, worth knowing about)
